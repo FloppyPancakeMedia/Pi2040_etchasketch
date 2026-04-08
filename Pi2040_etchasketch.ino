@@ -48,7 +48,7 @@ std::map<uint8_t, uint16_t> colors = {
   {7, ST77XX_RED},
 };
 
-std::map<uint16_t, char *> colorToText = {
+std::map<uint16_t, const char*> colorToText = {
   {ST77XX_BLUE, "Blue"},
   {ST77XX_CYAN, "Cyan"},
   {ST77XX_GREEN, "Green"},
@@ -59,6 +59,7 @@ std::map<uint16_t, char *> colorToText = {
   {ST77XX_RED, "Red"}
 };
 
+uint16_t bitmap[DIMENSIONS][DIMENSIONS];
 
 void setup() {
   Serial.begin(57600);
@@ -93,6 +94,8 @@ void setup() {
       bitmap[i][j] = ST77XX_BLACK;
     }
   }
+
+  setupMenu();
 }
 
 /* 
@@ -104,32 +107,36 @@ void setup() {
 /******** STATES *********/
 #define DRAWING 0
 #define FLOATING 1
-#define CHOOSING_OPTION 2
-#define OPTION_SELECTED 3
-#define OPTION_COMPLETE 4
+#define MENU_OPENING 2
+#define MENU_CLOSING 3
+#define CHOOSING_OPTION 4
+#define OPTION_SELECTED 5
+#define OPTION_COMPLETE 6
 /*************************/
 uint8_t curState = DRAWING;
+uint8_t savedState = DRAWING; // Saves either drawing or floating
 
-uint8_t timer = 0;
+uint8_t faderCheckTimer = 0;
 uint32_t textTimer = 0;
 const uint8_t TIMER_MAX = 10;
 uint8_t textTimerOn = 0;
 
-// uint8_t drawing = 1; // bool
+bool switchedToDrawing = false;
 
 int16_t prevFaderRead = 0;
 uint8_t prevClkR = 0, prevClkL = 0;
 uint8_t prevDTR = 0;
 
-uint8_t curX = 120, curY = 120;
-uint8_t prevX = 120, prevY = 120;
+uint16_t curX = 120, curY = 120;
+uint16_t prevX = 120, prevY = 120;
 
-const uint8_t textRectWidth = DIMENSIONS / 4, textRectHeight = 25, textRectX = DIMENSIONS / 4, textRectY = 5;
+const uint16_t colorSelWidth = DIMENSIONS / 4, colorSelHeight = 10, colorSelX = (DIMENSIONS / 4) + (colorSelWidth / 2), colorSelY = 5;
 
 uint16_t foregroundColor = ST77XX_MAGENTA;
 uint16_t prevColor;
 
-uint16_t bitmap[DIMENSIONS][DIMENSIONS];
+void hideMenu();
+void runMenu();
 
 /* 
   #####################################
@@ -141,6 +148,11 @@ uint16_t bitmap[DIMENSIONS][DIMENSIONS];
 void loop() {
   // Read fader to check if color change needed
   if (curState == DRAWING || curState == FLOATING){
+    if (switchedToDrawing){
+      tft.drawPixel(curX, curY, bitmap[curX][curY]); // Rewrite white pixel to prev color
+      switchedToDrawing = false;
+    }
+
     checkFader();
 
     // Worry about if text is on screen
@@ -154,11 +166,17 @@ void loop() {
     // Main drawing loop
     runDraw();
   }
+  else if (curState == OPTION_COMPLETE){
+    curState = savedState;
+  }
+  else{
+    runMenu();
+  }
 }
 
 void checkFader(){
-  timer += 1;
-  if (timer >= TIMER_MAX){
+  faderCheckTimer += 1;
+  if (faderCheckTimer >= TIMER_MAX){
     int16_t faderRead = analogRead(FADER);
     faderRead = constrain(faderRead, 0, 950);
     faderRead = map(faderRead, 5, 950, 0, 7);
@@ -167,37 +185,56 @@ void checkFader(){
       changeColor(faderRead);
     }
     prevFaderRead = faderRead;
-    timer = 0;
+    faderCheckTimer = 0;
   }
 }
 
 void changeColor(int16_t faderRead){
-  if (faderRead != prevFaderRead){
-    // Clear previous, if exists
-    // tft.fillRect(0, 0, 240, 10, ST77XX_BLACK);
-    for (int i = textRectX; i < textRectX + textRectWidth; i++){
-      for (int j = textRectY; j < textRect + textRectHeight; j++){
+  // Clear previous, if exists
+  repaintFromBitmap(colorSelX, colorSelY, colorSelWidth, colorSelHeight, false);
+
+  // Change color and display message
+  foregroundColor = colors[faderRead];
+
+  tft.fillRect(colorSelX, colorSelY, colorSelWidth, colorSelHeight, foregroundColor);
+  textTimerOn = 1;
+}
+
+/* DISCLAIMER: This function was produced by Claude AI. I gave it a shot. It did better*/
+void repaintFromBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool fancy){
+  if (fancy){
+    uint16_t total = w * h;
+    uint16_t *indices = (uint16_t*)malloc(total * sizeof(uint16_t));
+    if (!indices) return; // allocation failed
+
+    for (uint16_t i = 0; i < total; i++) indices[i] = i;
+
+    // Fisher-Yates shuffle
+    for (uint16_t i = total - 1; i > 0; i--) {
+        uint16_t j = rand() % (i + 1);
+        uint16_t tmp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = tmp;
+    }
+
+    for (uint16_t i = 0; i < total; i++) {
+        uint16_t px = x + (indices[i] % w);
+        uint16_t py = y + (indices[i] / w);
+        tft.drawPixel(px, py, bitmap[px][py]);
+    }
+
+    free(indices);
+  }
+  /* Aside from this part. I wrote this.*/
+  else{
+    for (uint16_t i = x; i < x + w; i++){
+      for (uint16_t j = y; j < y + h; j++){
         tft.drawPixel(i, j, bitmap[i][j]);
       }
     }
-
-    // Change color and display message
-    foregroundColor = colors[faderRead];
-    tft.setCursor(1, 1);
-    tft.setTextColor(foregroundColor);
-    tft.printf("%s", colorToText[foregroundColor]);
-    Serial.println("Changed color");
-    textTimerOn = 1;
   }
 }
-
-void clearText(){ 
-  // tft.fillRect(0, 0, 240, 10, ST77XX_BLACK);
-
-  // Reset timer
-  textTimerOn = 0;
-  textTimer = 0;
-}
+/* End AI cheat section */
 
 void runDraw(){  
   prevX = curX;
@@ -250,9 +287,43 @@ void runDraw(){
   prevClkL = clkReadL;
 }
 
+
+
+void clearText(){ 
+  repaintFromBitmap(colorSelX, colorSelY, colorSelWidth, colorSelHeight, true);
+  // Reset timer
+  textTimerOn = 0;
+  textTimer = 0;
+}
+
+void clearScreen(){
+  Serial.println("Clearing screen");
+  tft.fillScreen(ST77XX_BLACK);
+  // Reset bitmap
+  for (int i = 0; i < DIMENSIONS; i++){
+    for (int j = 0; j < DIMENSIONS; j++){
+      bitmap[i][j] = ST77XX_BLACK;
+    }
+  }
+  curX = 120;
+  curY = 120;
+}
+
+/*
+############################
+#### Interrupt Routines ####
+############################
+*/
+
 void toggleDrawing(){
+  // Debounce
+  static uint32_t lastPress = 0;
+  uint32_t now = millis();
+  if (now - lastPress < 200) return; // ignore if <200ms since last press
+  lastPress = now;
+  
   if (curState == FLOATING){
-    tft.drawPixel(curX, curY, bitmap[curX][curY]); // Rewrite white pixel to prev color
+    switchedToDrawing = true;
     curState = DRAWING;
   } 
   else if (curState == DRAWING){
@@ -262,22 +333,19 @@ void toggleDrawing(){
   
 }
 
-void clearScreen(){
-  Serial.println("Clearing screen");
-  tft.fillScreen(ST77XX_BLACK);
-  curX = 120;
-  curY = 120;
-}
-
-void openMenu(){
-
-}
-
-void closeMenu(){
-
-}
-
 void swrPressed(){
+  // Debounce
+  static uint32_t lastPress = 0;
+  uint32_t now = millis();
+  if (now - lastPress < 200) return; // ignore if <200ms since last press
+  lastPress = now;
 
+  if (curState == DRAWING || curState == FLOATING){
+    savedState = curState;
+    curState = MENU_OPENING;
+  }
+  else if (curState == CHOOSING_OPTION){
+    curState = OPTION_SELECTED;
+  }
 }
 

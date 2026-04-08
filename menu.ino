@@ -1,39 +1,96 @@
-#include <string>
+// #include <string>
 
-const char options[2][32] = {"Clear", "Save"};
-const int16_t b_width = 50, b_height = 20;
-
+#define SAVE "Save"
+#define CLEAR "Clear"
+#define EXIT "Exit"
+#define NUM_BUTTONS 3
 
 struct Button{
-  int16_t x, y, width = 50, height = 20;
-  uint16_t normalColor;
-  uint16_t highlightColor;
+  int16_t x, y;
   char action[32];
+
+  Button(int16_t new_x, int16_t new_y, char *a){
+    x = new_x;
+    y = new_y;
+    strcpy(action, a);
+  }
+
+  Button(){
+    x = 0;
+    y = 0;
+    action[0] = '\0';
+  }
 };
 
-Button buttons[2];
+struct Menu {
+  int16_t buttonWidth = 90, buttonHeight = 40;
+  int16_t Height = 0, Width = 90;
+  Button buttons[3];
+  uint16_t normalColor;
+  uint16_t highlightColor;
+};
+
+Menu menu;
+Button curButton;
 
 void setupMenu(){
-  for (int i = 0; i < 2; i++){
-    Button b = Button();
-    strncpy(b.action, options[i], 32);
-    b.x = DIMENSIONS - b.width;
-    if (i == 0){
-      b.y = DIMENSIONS - b.height;
+  menu.highlightColor = colors[0];
+  menu.normalColor = colors[6];
+
+  for (int i = 0; i < NUM_BUTTONS; i++){
+    int16_t x = DIMENSIONS - menu.buttonWidth;
+    int16_t y = 0;
+    if (i == 0) y = DIMENSIONS - menu.buttonHeight;
+    else y = menu.buttons[i-1].y - menu.buttonHeight;
+
+    char action[32];
+    if (i == 0) strcpy(action, SAVE);
+    else if (i == 1) strcpy(action, CLEAR);
+    else if (i == 2) strcpy(action, EXIT);
+    Button b = Button(x, y, action);
+
+    menu.buttons[i] = b;
+  }
+
+  menu.Height = NUM_BUTTONS * menu.buttonHeight;
+}
+
+void runMenu(){
+  if (curState == MENU_OPENING){
+    showMenu();
+  }
+  else if (curState == CHOOSING_OPTION){
+    // TODO: LISTEN FOR INPUT
+  }
+  else if (curState == OPTION_SELECTED){
+    // char *action = curButton.action;
+    char *action = EXIT; // TEMPORARY DEBUG THING
+    if (strcmp(action, CLEAR) == 0){
+      clearScreen();
+      curState = OPTION_COMPLETE;
     }
-    else{
-      b.y = buttons[i-1].y - b.height;
+    else if (strcmp(action, SAVE) == 0){
+
     }
-    b.normalColor = colors[6]; // Orange
-    b.highlightColor = colors[0]; 
+    else if (strcmp(action, EXIT) == 0){
+      hideMenu();
+      curState = OPTION_COMPLETE;
+    }
   }
 }
 
 void showMenu(){
-  for (int i = 0; i < 2; i++){
-    tft.drawRect(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, buttons[i].normalColor);
-    tft.setCursor(buttons[i].x + 10, buttons[i].y + 10);
-    tft.print(buttons[i].action);
+  tft.setTextSize(2);
+  for (int i = 0; i < NUM_BUTTONS; i++){
+    tft.drawRect(menu.buttons[i].x, menu.buttons[i].y, menu.buttonWidth, menu.buttonHeight, menu.normalColor);
+    tft.fillRect(menu.buttons[i].x + 1, menu.buttons[i].y + 1, menu.buttonWidth - 1, menu.buttonHeight -1, ST77XX_BLACK);
+    tft.setCursor(menu.buttons[i].x + 10, menu.buttons[i].y + 10);
+    tft.print(menu.buttons[i].action);
   }
+  curState = CHOOSING_OPTION;
+}
+
+void hideMenu(){
+  repaintFromBitmap(menu.buttons[NUM_BUTTONS - 1].x, menu.buttons[NUM_BUTTONS - 1].y, menu.Width, menu.Height, true);
 }
 
