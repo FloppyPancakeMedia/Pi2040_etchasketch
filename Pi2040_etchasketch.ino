@@ -22,7 +22,7 @@
 
 #ifdef PICO1
   const int D_SDA = 19, D_SCL = 18, D_RST = 21, D_DC = 20, D_CS = 17;
-  const int SD_CS = 13, SD_MOSI = 12, SD_CLK = 14, SD_MISO = 15;
+  const int SD_CS = 9, SD_MOSI = 8, SD_CLK = 10, SD_MISO = 11, SD_DC = 12;
   const int DTL = 3, CLKL = 2, SWL = 4;
   const int DTR = 7, CLKR = 6, SWR = 8;
   const int FADER = 26;
@@ -225,6 +225,7 @@ void repaintFromBitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool fanc
 
     free(indices);
   }
+  
   /* Aside from this part. I wrote this.*/
   else{
     for (uint16_t i = x; i < x + w; i++){
@@ -241,35 +242,21 @@ void runDraw(){
   prevY = curY;
 
   // Check for X movement
-  int clkRead = digitalRead(CLKR);
-  if (prevClkR != clkRead && clkRead == LOW){
-    Serial.printf("clkRead: %d | prevClkR: %d | Dtr: %d\n", clkRead, prevClkR, digitalRead(DTR));
-    if (digitalRead(DTR) != clkRead){
-      curX++;
-    }
-    else{
-      curX--;
-    }
-  }
+  uint8_t xDir = getRotaryR();
+  if (xDir == 1) curX++;
+  else if (xDir == 2) {curX--; Serial.printf("Decrementing... CurX: %d\n", curX); };
 
   // Check for Y movement
-  int clkReadL = digitalRead(CLKL);
-  if (clkReadL != prevClkL && clkReadL == LOW){
-    Serial.println("Drawing Y");
-    if (digitalRead(DTL) != clkReadL){
-      curY++;
-    }
-    else{
-      curY--;
-    }
-  }
+  uint8_t yDir = getRotaryL();
+  if (yDir == 1) curY++;
+  else if (yDir == 2) curY--;
 
   // Check X and Y bounds and clamp
   if (curX >= DIMENSIONS - 2) curX = DIMENSIONS - 2;
   else if (curX <= 2) curX = 2;
 
   if (curY >= DIMENSIONS - 2) curY = DIMENSIONS - 2;
-  else if (curY <= 11) curY = 11;
+  else if (curY <= 11) curY = 2;
 
   // Draw
   if (prevX != curX || prevY != curY){
@@ -282,12 +269,33 @@ void runDraw(){
       bitmap[curX][curY] = foregroundColor;
     }
   }
-
-  prevClkR = clkRead;
-  prevClkL = clkReadL;
 }
 
+uint8_t getRotaryR(){
+  uint8_t value = 0;
+  int clkReadR = digitalRead(CLKR);
 
+  if (prevClkR != clkReadR && clkReadR == LOW){
+    if (digitalRead(DTR) != clkReadR){ value = 1; } // Left
+    else{ value = 2; } // Right
+  }
+
+  prevClkR = clkReadR;
+  return value;
+}
+
+uint8_t getRotaryL(){
+  uint8_t value = 0;
+  int clkReadL = digitalRead(CLKL);
+  
+  if (prevClkL != clkReadL && clkReadL == LOW){
+    if (digitalRead(DTL) != clkReadL){ value = 1; } // Up
+    else{ value = 2; } // Down
+  }
+
+  prevClkL = clkReadL;
+  return value;
+}
 
 void clearText(){ 
   repaintFromBitmap(colorSelX, colorSelY, colorSelWidth, colorSelHeight, true);

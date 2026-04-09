@@ -1,4 +1,5 @@
-// #include <string>
+#include <SD.h>
+#include <SPI.h>
 
 #define SAVE "Save"
 #define CLEAR "Clear"
@@ -31,9 +32,37 @@ struct Menu {
 };
 
 Menu menu;
-Button curButton;
+Button *curButton = nullptr, *prevButton = nullptr;
+uint8_t curButtonIdx = 0;
 
 void setupMenu(){
+  // TODO: LEFT OFF WITH BOARD CRASHING BEFORE PROGRAM CAN RUN
+  if (!SPI1.setCS(SD_CS)) Serial.println("Failed to set CS");
+  if (!SPI1.setMISO(SD_MISO)) Serial.println("Failed to set MISO");
+  if (!SPI1.setMOSI(SD_MOSI)) Serial.println("Failed to set MOSI");
+  if (!SPI1.setSCK(SD_CLK)) Serial.println("Failed to set CLK");
+
+  if (!SD.begin(SD_CS)){
+    Serial.println("Failed to init SD card reader...");
+  }
+  else{
+    Serial.println("Writing new file");
+    File file = SD.open("test.txt", FILE_WRITE);
+    file.println("Testing testing one tooo");
+    file.close();
+    Serial.println("Done writing file");
+    Serial.println();
+
+    Serial.println("Attempting to read file");
+    file = SD.open("test.txt");
+    if (file){
+      while (file.available()) Serial.write(file.read());
+      file.close();
+    }
+    Serial.println();
+    Serial.println("Done reading file");
+  }
+
   menu.highlightColor = colors[0];
   menu.normalColor = colors[6];
 
@@ -52,6 +81,8 @@ void setupMenu(){
     menu.buttons[i] = b;
   }
 
+  prevButton = curButton = &menu.buttons[0];
+
   menu.Height = NUM_BUTTONS * menu.buttonHeight;
 }
 
@@ -60,11 +91,31 @@ void runMenu(){
     showMenu();
   }
   else if (curState == CHOOSING_OPTION){
-    // TODO: LISTEN FOR INPUT
+    uint8_t direction = getRotaryR();
+    
+    if (direction != 0) {
+      // Save prev button for redrawing
+      prevButton = &menu.buttons[curButtonIdx];
+      
+      // Up
+      if (direction == 1) {
+        curButtonIdx++;
+        if (curButtonIdx >= NUM_BUTTONS) curButtonIdx = 0; 
+      }
+      // Down
+      else {
+        if (curButtonIdx == 0) curButtonIdx = NUM_BUTTONS - 1;
+        else curButtonIdx--;
+      }
+      
+      curButton = &menu.buttons[curButtonIdx];
+      highlightButton();
+    }
   }
+    
   else if (curState == OPTION_SELECTED){
-    // char *action = curButton.action;
-    char *action = EXIT; // TEMPORARY DEBUG THING
+    char *action = curButton->action;
+    
     if (strcmp(action, CLEAR) == 0){
       clearScreen();
       curState = OPTION_COMPLETE;
@@ -79,6 +130,11 @@ void runMenu(){
   }
 }
 
+void highlightButton(){
+  tft.drawRect(prevButton->x, prevButton->y, menu.buttonWidth + 1, menu.buttonHeight, menu.normalColor);
+  tft.drawRect(curButton->x, curButton->y, menu.buttonWidth + 1, menu.buttonHeight, menu.highlightColor);
+}
+
 void showMenu(){
   tft.setTextSize(2);
   for (int i = 0; i < NUM_BUTTONS; i++){
@@ -88,6 +144,13 @@ void showMenu(){
     tft.print(menu.buttons[i].action);
   }
   curState = CHOOSING_OPTION;
+
+  // Reset default button
+  curButton = &menu.buttons[0];
+  prevButton = &menu.buttons[0];
+  curButtonIdx = 0;
+
+  highlightButton();
 }
 
 void hideMenu(){
