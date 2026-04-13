@@ -1,3 +1,5 @@
+
+
 #include <Adafruit_ST7789.h>
 #include <map>
 
@@ -7,7 +9,7 @@
   ##############################
 */
 #define RGB888to565(r, g, b) (uint16_t)( ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3) )
-#define DIMENSIONS 240
+#define DIMENSIONS 240 // For SH1106 display
 
 #define PICO1
 
@@ -22,7 +24,7 @@
 
 #ifdef PICO1
   const int D_SDA = 19, D_SCL = 18, D_RST = 21, D_DC = 20, D_CS = 17;
-  const int SD_CS = 9, SD_MOSI = 8, SD_CLK = 10, SD_MISO = 11, SD_DC = 12;
+  const int SD_CS = 13, SD_MOSI = 15, SD_CLK = 14, SD_MISO = 12; // Swap MOSI/MISO pins on hardware when get a chance!!!
   const int DTL = 3, CLKL = 2, SWL = 4;
   const int DTR = 7, CLKR = 6, SWR = 8;
   const int FADER = 26;
@@ -244,7 +246,7 @@ void runDraw(){
   // Check for X movement
   uint8_t xDir = getRotaryR();
   if (xDir == 1) curX++;
-  else if (xDir == 2) {curX--; Serial.printf("Decrementing... CurX: %d\n", curX); };
+  else if (xDir == 2) {curX--; }
 
   // Check for Y movement
   uint8_t yDir = getRotaryL();
@@ -252,11 +254,11 @@ void runDraw(){
   else if (yDir == 2) curY--;
 
   // Check X and Y bounds and clamp
-  if (curX >= DIMENSIONS - 2) curX = DIMENSIONS - 2;
-  else if (curX <= 2) curX = 2;
+  if (curX > DIMENSIONS - 2) curX = DIMENSIONS - 2;
+  else if (curX < 2) curX = 2;
 
-  if (curY >= DIMENSIONS - 2) curY = DIMENSIONS - 2;
-  else if (curY <= 11) curY = 2;
+  if (curY > DIMENSIONS - 2) curY = DIMENSIONS - 3;
+  else if (curY < 2) curY = 2;
 
   // Draw
   if (prevX != curX || prevY != curY){

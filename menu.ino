@@ -1,4 +1,4 @@
-#include <SD.h>
+
 #include <SPI.h>
 
 #define SAVE "Save"
@@ -36,32 +36,7 @@ Button *curButton = nullptr, *prevButton = nullptr;
 uint8_t curButtonIdx = 0;
 
 void setupMenu(){
-  // TODO: LEFT OFF WITH BOARD CRASHING BEFORE PROGRAM CAN RUN
-  if (!SPI1.setCS(SD_CS)) Serial.println("Failed to set CS");
-  if (!SPI1.setMISO(SD_MISO)) Serial.println("Failed to set MISO");
-  if (!SPI1.setMOSI(SD_MOSI)) Serial.println("Failed to set MOSI");
-  if (!SPI1.setSCK(SD_CLK)) Serial.println("Failed to set CLK");
-
-  if (!SD.begin(SD_CS)){
-    Serial.println("Failed to init SD card reader...");
-  }
-  else{
-    Serial.println("Writing new file");
-    File file = SD.open("test.txt", FILE_WRITE);
-    file.println("Testing testing one tooo");
-    file.close();
-    Serial.println("Done writing file");
-    Serial.println();
-
-    Serial.println("Attempting to read file");
-    file = SD.open("test.txt");
-    if (file){
-      while (file.available()) Serial.write(file.read());
-      file.close();
-    }
-    Serial.println();
-    Serial.println("Done reading file");
-  }
+  setupSD();
 
   menu.highlightColor = colors[0];
   menu.normalColor = colors[6];
@@ -121,7 +96,8 @@ void runMenu(){
       curState = OPTION_COMPLETE;
     }
     else if (strcmp(action, SAVE) == 0){
-
+      save();
+      curState = OPTION_COMPLETE;
     }
     else if (strcmp(action, EXIT) == 0){
       hideMenu();
